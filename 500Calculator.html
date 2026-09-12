@@ -327,7 +327,7 @@ function calculateAll(){
   // 揽收
   const pickupPallets=Number(document.getElementById('pickupPallets').value)||0;
   const pickup=validPeople('pickup');
-  setResult('pickupResult','pickupSub',pickupPallets*650,pickup.total*275,pickup.total,pickup.invalid);
+  setResult('pickupResult','pickupSub',pickupPallets*650,pickup.total*400,pickup.total,pickup.invalid);
 
   // 干线+清关
   const trunk=Number(document.getElementById('trunkPallets').value)||0;
