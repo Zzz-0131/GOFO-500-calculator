@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#111111" />
+<title>现场人效计算器</title>
+<style>
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Arial,sans-serif;
+    background:#f4f4f6;
+    color:#171717;
+  }
+  .app{max-width:560px;margin:0 auto;padding:16px 14px 40px}
+  h1{font-size:24px;margin:6px 0 16px;text-align:center}
+  .tabs{
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;
+    position:sticky;top:0;z-index:20;background:#f4f4f6;padding:8px 0 10px;
+  }
+  .tab{
+    border:0;border-radius:12px;padding:12px 8px;font-size:15px;font-weight:700;
+    background:#e5e5e7;color:#333;
+  }
+  .tab.active{background:#111;color:#fff}
+  .page{display:none}
+  .page.active{display:block}
+  .card{
+    background:#fff;border-radius:18px;padding:18px;margin-bottom:14px;
+    box-shadow:0 2px 12px rgba(0,0,0,.05);
+  }
+  .section-title{font-size:17px;font-weight:800;margin:0 0 14px}
+  .field{margin-bottom:14px}
+  .field:last-child{margin-bottom:0}
+  label{display:block;font-size:14px;font-weight:700;margin-bottom:7px}
+  .input-row{display:flex;align-items:center;gap:8px}
+  input[type=number]{
+    width:100%;border:1px solid #d8d8dc;border-radius:12px;
+    font-size:20px;padding:13px 14px;background:#fff;outline:none;
+  }
+  input[type=number]:focus{border-color:#111}
+  .unit{min-width:28px;color:#666;font-size:14px}
+  .counter-row{
+    display:grid;grid-template-columns:54px 1fr 54px;gap:10px;align-items:center;
+  }
+  .counter-btn{
+    height:46px;border:0;border-radius:12px;background:#ececee;
+    font-size:26px;font-weight:500;
+  }
+  .counter-value{
+    height:46px;border:1px solid #d8d8dc;border-radius:12px;
+    display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;
+  }
+  .station-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+  .station{
+    display:grid;grid-template-columns:1fr 100px 28px;gap:8px;align-items:center;
+    padding:10px 0;border-top:1px solid #efeff1;
+  }
+  .station:first-child{border-top:0}
+  .station-name{font-size:14px;font-weight:700}
+  .station input{font-size:18px;padding:10px 8px;text-align:center}
+  .warning{font-size:12px;color:#b42318;margin-top:3px}
+  .hint{font-size:12px;color:#777;line-height:1.5;margin-top:8px}
+  .result-card{text-align:center;padding:24px 16px}
+  .result-label{font-size:14px;color:#666;margin-bottom:6px}
+  .result{font-size:36px;font-weight:900;line-height:1.15;letter-spacing:-1px}
+  .subresult{font-size:13px;color:#777;margin-top:10px;line-height:1.6}
+  .zero{color:#999}
+  .toolbar{
+    display:flex;justify-content:flex-end;margin:2px 0 12px;
+  }
+  .clear-btn{
+    border:1px solid #d8d8dc;background:#fff;border-radius:10px;
+    padding:9px 12px;font-size:13px;font-weight:700;color:#444;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>现场人效计算器</h1>
+
+  <div class="tabs">
+    <button class="tab active" data-page="pickup">揽收</button>
+    <button class="tab" data-page="trunk">干线+清关</button>
+    <button class="tab" data-page="ne">揽收 NE</button>
+  </div>
+
+  <div class="toolbar">
+    <button class="clear-btn" onclick="clearCurrentPage()">一键清空当前页面</button>
+  </div>
+
+  <!-- 揽收 -->
+  <section id="pickup" class="page active">
+    <div class="card">
+      <div class="section-title">货量</div>
+      <div class="field">
+        <label>揽收货量</label>
+        <div class="input-row">
+          <input id="pickupPallets" type="number" min="0" step="0.1" inputmode="decimal" placeholder="例如 20">
+          <span class="unit">板</span>
+        </div>
+        <div class="hint">按 650 票 / 板换算</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">集包台</div>
+      <label>开台数量（最多 24 张）</label>
+      <div class="counter-row">
+        <button class="counter-btn" onclick="changeCount('pickup',-1)">−</button>
+        <div id="pickupCount" class="counter-value">4</div>
+        <button class="counter-btn" onclick="changeCount('pickup',1)">＋</button>
+      </div>
+      <div id="pickupStations" class="station-list"></div>
+      <div class="hint">每张集包台最少 8 人；集包人效 275 票 / 人 / 小时。</div>
+    </div>
+
+    <div class="card result-card">
+      <div class="result-label">预计清完需要</div>
+      <div id="pickupResult" class="result zero">—</div>
+      <div id="pickupSub" class="subresult"></div>
+    </div>
+  </section>
+
+  <!-- 干线+清关 -->
+  <section id="trunk" class="page">
+    <div class="card">
+      <div class="section-title">货量</div>
+      <div class="field">
+        <label>干线</label>
+        <div class="input-row">
+          <input id="trunkPallets" type="number" min="0" step="0.1" inputmode="decimal" placeholder="例如 20">
+          <span class="unit">板</span>
+        </div>
+        <div class="hint">按 450 票 / 板换算</div>
+      </div>
+      <div class="field">
+        <label>清关行</label>
+        <div class="input-row">
+          <input id="customsPallets" type="number" min="0" step="0.1" inputmode="decimal" placeholder="例如 15">
+          <span class="unit">板</span>
+        </div>
+        <div class="hint">按 700 票 / 板换算</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">大粗分台</div>
+      <label>开台数量（最多 5 张）</label>
+      <div class="counter-row">
+        <button class="counter-btn" onclick="changeCount('large',-1)">−</button>
+        <div id="largeCount" class="counter-value">2</div>
+        <button class="counter-btn" onclick="changeCount('large',1)">＋</button>
+      </div>
+      <div id="largeStations" class="station-list"></div>
+      <div class="hint">每张大粗分台最少 12 人，最多 16 人。</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">小粗分台</div>
+      <label>开台数量（最多 3 张）</label>
+      <div class="counter-row">
+        <button class="counter-btn" onclick="changeCount('small',-1)">−</button>
+        <div id="smallCount" class="counter-value">1</div>
+        <button class="counter-btn" onclick="changeCount('small',1)">＋</button>
+      </div>
+      <div id="smallStations" class="station-list"></div>
+      <div class="hint">每张小粗分台最少 10 人，最多 15 人；普通粗分人效 280 票 / 人 / 小时。</div>
+    </div>
+
+    <div class="card result-card">
+      <div class="result-label">预计清完需要</div>
+      <div id="trunkResult" class="result zero">—</div>
+      <div id="trunkSub" class="subresult"></div>
+    </div>
+  </section>
+
+  <!-- NE -->
+  <section id="ne" class="page">
+    <div class="card">
+      <div class="section-title">货量</div>
+      <div class="field">
+        <label>NE 笼车</label>
+        <div class="input-row">
+          <input id="neCages" type="number" min="0" step="0.1" inputmode="decimal" placeholder="例如 18">
+          <span class="unit">笼</span>
+        </div>
+        <div class="hint">按 300 票 / 笼换算</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">小粗分台</div>
+      <label>开台数量（最多 3 张）</label>
+      <div class="counter-row">
+        <button class="counter-btn" onclick="changeCount('ne',-1)">−</button>
+        <div id="neCount" class="counter-value">1</div>
+        <button class="counter-btn" onclick="changeCount('ne',1)">＋</button>
+      </div>
+      <div id="neStations" class="station-list"></div>
+      <div class="hint">每张最少 10 人，最多 15 人；NE 揽收需要逐票签入。人效 = 280 × 0.8 = 224 票 / 人 / 小时。</div>
+    </div>
+
+    <div class="card result-card">
+      <div class="result-label">预计清完需要</div>
+      <div id="neResult" class="result zero">—</div>
+      <div id="neSub" class="subresult"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const config = {
+  pickup: { count:4, max:24, minPeople:8,  maxPeople:null, defaultPeople:8,  productivity:275 },
+  large:  { count:2, max:5,  minPeople:12, maxPeople:16,   defaultPeople:12, productivity:280 },
+  small:  { count:1, max:3,  minPeople:10, maxPeople:15,   defaultPeople:10, productivity:280 },
+  ne:     { count:1, max:3,  minPeople:10, maxPeople:15,   defaultPeople:10, productivity:224 }
+};
+
+const stationPeople = { pickup:[], large:[], small:[], ne:[] };
+
+function initPeople(type){
+  const c = config[type];
+  while(stationPeople[type].length < c.count) stationPeople[type].push(c.defaultPeople);
+  stationPeople[type] = stationPeople[type].slice(0,c.count);
+}
+
+function changeCount(type, delta){
+  const c=config[type];
+  c.count=Math.max(0,Math.min(c.max,c.count+delta));
+  initPeople(type);
+  renderStations(type);
+  calculateAll();
+  saveState();
+}
+
+function renderStations(type){
+  initPeople(type);
+  const idMap={pickup:'pickupStations',large:'largeStations',small:'smallStations',ne:'neStations'};
+  const countMap={pickup:'pickupCount',large:'largeCount',small:'smallCount',ne:'neCount'};
+  document.getElementById(countMap[type]).textContent=config[type].count;
+  const box=document.getElementById(idMap[type]);
+  box.innerHTML='';
+  for(let i=0;i<config[type].count;i++){
+    const val=stationPeople[type][i] ?? config[type].defaultPeople;
+    const label = type==='pickup' ? `${i+1}号集包台` :
+                  type==='large' ? `${i+1}号大粗分台` :
+                  `${i+1}号小粗分台`;
+    const wrap=document.createElement('div');
+    wrap.className='station';
+    wrap.innerHTML=`
+      <div>
+        <div class="station-name">${label}</div>
+        <div id="${type}-warn-${i}" class="warning"></div>
+      </div>
+      <input type="number" min="0" ${config[type].maxPeople ? `max="${config[type].maxPeople}"` : ''} step="1" inputmode="numeric" value="${val}"
+             oninput="setPeople('${type}',${i},this.value)">
+      <span class="unit">人</span>`;
+    box.appendChild(wrap);
+  }
+}
+
+function setPeople(type,index,value){
+  let v=Math.max(0,Number(value)||0);
+  const maxP=config[type].maxPeople;
+  if(maxP!==null) v=Math.min(maxP,v);
+  stationPeople[type][index]=v;
+  const inputs=document.querySelectorAll(`#${type}Stations input`);
+  if(inputs[index] && Number(inputs[index].value)!==v) inputs[index].value=v;
+  calculateAll();
+  saveState();
+}
+
+function validPeople(type){
+  let total=0, invalid=0;
+  const min=config[type].minPeople;
+  stationPeople[type].forEach((p,i)=>{
+    const warn=document.getElementById(`${type}-warn-${i}`);
+    if(p>=min){
+      total+=p;
+      if(warn) warn.textContent='';
+    }else{
+      invalid++;
+      const maxText=config[type].maxPeople ? `，最多 ${config[type].maxPeople} 人` : '';
+      if(warn) warn.textContent=`最少 ${min} 人${maxText}；当前人数不足，不计入产能`;
+    }
+  });
+  return {total,invalid};
+}
+
+function formatDuration(hours){
+  if(!isFinite(hours) || hours<0) return '—';
+  if(hours===0) return '0 分钟';
+  let h=Math.floor(hours);
+  let m=Math.round((hours-h)*60);
+  if(m===60){h++;m=0;}
+  if(h>0 && m>0) return `${h} 小时 ${m} 分钟`;
+  if(h>0) return `${h} 小时`;
+  return `${m} 分钟`;
+}
+
+function setResult(resultId,subId,totalPackages,capacity,people,invalid){
+  const r=document.getElementById(resultId);
+  const s=document.getElementById(subId);
+  if(totalPackages<=0){
+    r.textContent='—';
+    r.classList.add('zero');
+    s.textContent='请输入货量';
+    return;
+  }
+  if(capacity<=0){
+    r.textContent='无法计算';
+    r.classList.remove('zero');
+    s.textContent='没有达到最低开台人数的有效台子';
+    return;
+  }
+  const hours=totalPackages/capacity;
+  r.textContent=formatDuration(hours);
+  r.classList.remove('zero');
+  const invalidText=invalid>0 ? `；${invalid} 张台人数不足未计入` : '';
+  s.textContent=`总货量约 ${Math.round(totalPackages).toLocaleString()} 票 · 有效人数 ${people} 人 · 当前产能约 ${Math.round(capacity).toLocaleString()} 票/小时${invalidText}`;
+}
+
+function calculateAll(){
+  // 揽收
+  const pickupPallets=Number(document.getElementById('pickupPallets').value)||0;
+  const pickup=validPeople('pickup');
+  setResult('pickupResult','pickupSub',pickupPallets*650,pickup.total*275,pickup.total,pickup.invalid);
+
+  // 干线+清关
+  const trunk=Number(document.getElementById('trunkPallets').value)||0;
+  const customs=Number(document.getElementById('customsPallets').value)||0;
+  const large=validPeople('large');
+  const small=validPeople('small');
+  const normalPeople=large.total+small.total;
+  const invalidNormal=large.invalid+small.invalid;
+  setResult('trunkResult','trunkSub',trunk*450+customs*700,normalPeople*280,normalPeople,invalidNormal);
+
+  // NE
+  const cages=Number(document.getElementById('neCages').value)||0;
+  const ne=validPeople('ne');
+  setResult('neResult','neSub',cages*300,ne.total*224,ne.total,ne.invalid);
+}
+
+
+const STORAGE_KEY='现场人效计算器_v2';
+
+function getActivePage(){
+  return document.querySelector('.tab.active')?.dataset.page || 'pickup';
+}
+
+function saveState(){
+  const state={
+    activePage:getActivePage(),
+    values:{
+      pickupPallets:document.getElementById('pickupPallets').value,
+      trunkPallets:document.getElementById('trunkPallets').value,
+      customsPallets:document.getElementById('customsPallets').value,
+      neCages:document.getElementById('neCages').value
+    },
+    counts:{
+      pickup:config.pickup.count,
+      large:config.large.count,
+      small:config.small.count,
+      ne:config.ne.count
+    },
+    stationPeople
+  };
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+}
+
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const state=JSON.parse(raw);
+
+    if(state.counts){
+      ['pickup','large','small','ne'].forEach(t=>{
+        if(Number.isFinite(Number(state.counts[t]))){
+          config[t].count=Math.max(0,Math.min(config[t].max,Number(state.counts[t])));
+        }
+      });
+    }
+
+    if(state.stationPeople){
+      ['pickup','large','small','ne'].forEach(t=>{
+        if(Array.isArray(state.stationPeople[t])){
+          stationPeople[t]=state.stationPeople[t].map(v=>{
+            let n=Math.max(0,Number(v)||0);
+            if(config[t].maxPeople!==null) n=Math.min(config[t].maxPeople,n);
+            return n;
+          });
+        }
+      });
+    }
+
+    ['pickup','large','small','ne'].forEach(renderStations);
+
+    if(state.values){
+      Object.entries(state.values).forEach(([id,val])=>{
+        const el=document.getElementById(id);
+        if(el) el.value=val ?? '';
+      });
+    }
+
+    if(state.activePage){
+      document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.page===state.activePage));
+      document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===state.activePage));
+    }
+  }catch(e){
+    console.warn('读取上次配置失败',e);
+  }
+}
+
+function clearCurrentPage(){
+  const page=getActivePage();
+
+  if(page==='pickup'){
+    document.getElementById('pickupPallets').value='';
+    config.pickup.count=0;
+    stationPeople.pickup=[];
+    renderStations('pickup');
+  }else if(page==='trunk'){
+    document.getElementById('trunkPallets').value='';
+    document.getElementById('customsPallets').value='';
+    config.large.count=0;
+    config.small.count=0;
+    stationPeople.large=[];
+    stationPeople.small=[];
+    renderStations('large');
+    renderStations('small');
+  }else if(page==='ne'){
+    document.getElementById('neCages').value='';
+    config.ne.count=0;
+    stationPeople.ne=[];
+    renderStations('ne');
+  }
+
+  calculateAll();
+  saveState();
+}
+
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.page).classList.add('active');
+    saveState();
+  });
+});
+
+['pickupPallets','trunkPallets','customsPallets','neCages'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',()=>{
+    calculateAll();
+    saveState();
+  });
+});
+
+loadState();
+['pickup','large','small','ne'].forEach(renderStations);
+calculateAll();
+saveState();
+</script>
+</body>
+</html>
